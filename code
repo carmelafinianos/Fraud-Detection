@@ -1,0 +1,298 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+data=pd.read_csv("synth_training_fe.csv")
+print(data.columns)
+
+
+print(data.head())
+
+num_rows = data.shape[0]
+
+print(f"Number of Rows in the DataFrame: {num_rows}")
+
+data['trans_date_trans_time']=pd.to_datetime(data['trans_date_trans_time'])
+data['trans_date']=data['trans_date_trans_time'].dt.date
+data['trans_time']=data['trans_date_trans_time'].dt.time
+print(data['trans_date_trans_time'].dtype)
+
+data['dob']=pd.to_datetime(data['dob'])
+
+print(data['dob'].dtype)
+
+from datetime import datetime
+current_date = datetime.now()
+data['age'] = (current_date - data['dob'])
+
+
+
+data.dropna(inplace=True)
+
+# Display the modified DataFrame
+print(data)
+# Assuming 'data' is your DataFrame and 'timedelta_column' is the column with timedelta
+data['age'] = pd.to_timedelta(data['age'])
+
+# Convert timedelta to years
+seconds_in_year = 365.25 * 24 * 60 * 60  # considering leap years
+data['age'] =np.floor( data['age'].dt.total_seconds() / seconds_in_year).astype(int)
+
+# Display the modified DataFrame
+print(data.head())
+
+data.drop(columns=['dob','trans_date_trans_time'], inplace=True)
+print(data.head)
+
+
+non_numeric_columns = data.select_dtypes(exclude=['float', 'int']).columns
+
+# Display the column names that are not floats or integers
+print(non_numeric_columns)
+# Assuming 'data' is your DataFrame
+num_rows = data.shape[0]
+
+print(f"Number of Rows in the DataFrame: {num_rows}")
+
+
+boolean_columns = ['is_high_risk_merch_cat']
+
+data[boolean_columns] = data[boolean_columns].astype(int)
+
+# Display the modified DataFrame
+print(data.head())
+
+
+# Columns to drop
+columns_to_drop = ['is_holiday','is_5multiple', 'is_lt2', 'is_near2500', 'is_whole_num', 'is_595ending']
+
+# Dropping the specified columns from the DataFrame
+data.drop(columns=columns_to_drop, inplace=True)
+
+# Display the first few rows of the modified DataFrame to confirm the changes
+print(data.head())
+
+from datetime import datetime
+reference_date = datetime(2000, 1, 1).date()  # Example reference date
+
+# Convert 'trans_date' to a numerical value: days since the reference date
+data['trans_date'] = (pd.to_datetime(data['trans_date']) - pd.to_datetime(reference_date)).dt.days
+
+
+
+data['total_transactions_per_card'] = data.groupby('cc_num')['cc_num'].transform('count')
+
+# Group by 'cc_num' and 'trans_date', then calculate the maximum transaction amount for each group
+max_trans_per_day = data.groupby(['cc_num', 'trans_date'])['amt'].transform('max')
+
+# Assign this back to the DataFrame
+data['max_trans_amt_per_day'] = max_trans_per_day
+print(data.head())
+
+#Group by card number and transaction date, then count transactions for each day
+daily_trans_count = data.groupby(['cc_num', 'trans_date']).size().reset_index(name='daily_trans_count')
+
+#Find the maximum daily transaction count for each card
+max_daily_trans_count = daily_trans_count.groupby('cc_num')['daily_trans_count'].transform('max')
+
+#Adding this maximum daily transaction count back to the daily_trans_count DataFrame
+daily_trans_count['max_daily_trans_count'] = max_daily_trans_count
+
+# Merge this information back to the original DataFrame on 'cc_num' and 'trans_date'
+data = pd.merge(data, daily_trans_count[['cc_num', 'trans_date', 'max_daily_trans_count']], on=['cc_num', 'trans_date'], how='left')
+
+# Verify the new column
+print(data.head())
+
+# Add a column for transaction count per card
+data['transaction_count_per_card'] = data.groupby('cc_num')['cc_num'].transform('size')
+
+# Display the first few rows to verify the new columns
+print(data.head())
+
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+
+non_numeric_columns = data.select_dtypes(exclude=['float', 'int']).columns
+
+# Encoding categorical columns
+label_encoders = {}
+for column in non_numeric_columns:
+    le = LabelEncoder()
+    data[column] = le.fit_transform(data[column])
+    label_encoders[column] = le
+
+
+
+# Splitting the data into features and target variable
+X = data.drop('is_fraud', axis=1)  # Replace 'target_variable' with the actual target column
+y = data['is_fraud']
+
+# Splitting the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+# Building a simple model (Random Forest in this case)
+model = RandomForestClassifier(class_weight='balanced')
+model.fit(X_train, y_train)
+
+# Making predictions on the test set
+y_pred = model.predict(X_test)
+
+
+
+# Evaluating the model
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Model Accuracy: {accuracy}')
+
+from sklearn.metrics import confusion_matrix
+
+conf_matrix = confusion_matrix(y_test, y_pred)
+TP = conf_matrix[1, 1]  # True Positives
+FP = conf_matrix[0, 1]  # False Positives
+FN = conf_matrix[1,0 ]  # False Negatives
+
+precision = TP / (TP + FP)
+recall = TP / (TP + FN)
+
+print(f'Precision: {precision}')
+print(f'Recall: {recall}')
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
+
+# Confusion Matrix
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix')
+plt.show()
+
+# Classification Report
+print('Classification Report:')
+print(classification_report(y_test, y_pred))
+
+# Feature Importance
+feature_importance = model.feature_importances_
+feature_names = X.columns
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=feature_importance, y=feature_names, palette='viridis')
+plt.xlabel('Feature Importance')
+plt.ylabel('Features')
+plt.title('Feature Importance Plot')
+plt.show()
+from sklearn.metrics import confusion_matrix
+
+
+conf_matrix = confusion_matrix(y_test, y_pred)
+TP = conf_matrix[1, 1]  # True Positives
+FP = conf_matrix[0, 1]  # False Positives
+FN = conf_matrix[1, 0]  # False Negatives
+
+precision = TP / (TP + FP)
+recall = TP / (TP + FN)
+
+print(f'Precision: {precision}')
+print(f'Recall: {recall}')
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+colors = ['#3498db', '#2ecc71']
+
+# Bar plot for Precision and Recall
+labels = ['Precision', 'Recall']
+values = [precision, recall]
+
+plt.figure(figsize=(8, 6))
+plt.bar(labels, values, color=colors)
+plt.title('Precision and Recall Comparison')
+plt.ylim(0, 1)  # Setting y-axis limit to match the range of precision and recall
+plt.ylabel('Score')
+plt.show()
+
+
+import pandas as pd
+
+
+# Calculate count of predicted_label == 1 for all transactions
+total_fraud_count = (data['is_fraud'] == 1).sum()
+
+# Calculate overall percentage of fraud
+overall_percentage_of_fraud = (total_fraud_count /len(y_pred)) * 100
+
+print(f"Overall Percentage of Fraud in the Predicted Labels: {overall_percentage_of_fraud:.2f}%")
+# Calculate manual time and cost for all transactions
+manual_time_per_transaction = 2 #202817 # in minutes
+hourly_wage = 30  # in dollars
+
+total_manual_time =(1000000*len(y_pred) * manual_time_per_transaction / 60 )/(len(y_pred)) # convert minutes to hours
+total_manual_cost = (1000000*total_manual_time * hourly_wage)/(len(y_pred))
+print(len((y_pred)))
+print(f"Total Manual Time: {total_manual_time:.2f} hours")
+print(f"Total Manual Cost: ${total_manual_cost:.2f}")
+
+
+print (len(y_pred))
+# Calculate count and time for automated transactions
+automated_count = int(1000000 * (overall_percentage_of_fraud / 100))
+automated_time = automated_count * (manual_time_per_transaction / 60)  # convert minutes to hours
+
+# Calculate count and time for manual transactions after automation
+manual_count_after_automation = 1000000* (overall_percentage_of_fraud/100)
+manual_time_after_automation = manual_count_after_automation * (manual_time_per_transaction / 60)  # convert minutes to hours
+
+# Calculate cost for manual transactions after automation
+total_manual_cost_after_automation = manual_time_after_automation * hourly_wage
+
+print("Time Spent on Manual Transactions After Automation: {:.2f} hours".format(manual_time_after_automation))
+print("Total Manual Cost After Automation: ${:.2f}".format(total_manual_cost_after_automation))
+
+from sklearn.metrics import roc_curve, auc
+
+y_scores = model.predict_proba(X_test)[:, 1]
+
+# Calculate ROC curve
+fpr, tpr, thresholds = roc_curve(y_test, y_scores)
+roc_auc = auc(fpr, tpr)
+
+# Plotting ROC Curve
+plt.figure(figsize=(8, 8))
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC Curve (AUC = {roc_auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.legend(loc='lower right')
+plt.show()
+
+from sklearn.svm import SVC
+
+# Building a Support Vector Machine (SVM) model
+svm_model = SVC()
+svm_model.fit(X_train, y_train)
+
+# Making predictions on the test set for SVM
+svm_y_pred = svm_model.predict(X_test)
+
+# Evaluating the SVM model
+svm_accuracy = accuracy_score(y_test, svm_y_pred)
+print(f'SVM Model Accuracy: {svm_accuracy}')
+
+# Confusion Matrix for SVM
+svm_cm = confusion_matrix(y_test, svm_y_pred)
+sns.heatmap(svm_cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix for SVM')
+plt.show()
+
+# Classification Report for SVM
+print('Classification Report for SVM:')
+print(classification_report(y_test, svm_y_pred))
